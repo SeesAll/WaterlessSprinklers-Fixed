@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Collections.Generic;
@@ -6,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.1.0")]
+    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.2.0")]
     [Description("Allows sprinklers to operate without a water connection.")]
     class WaterlessSprinklers : CovalencePlugin
     {
@@ -16,6 +17,7 @@ namespace Oxide.Plugins
         private const int RefreshDelay = 2;
 
         private Configuration _config;
+        private StoredData _storedData;
         private ItemDefinition _waterDefinition;
         private readonly HashSet<Sprinkler> _modifiedSprinklers = new HashSet<Sprinkler>();
 
@@ -35,8 +37,17 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Make sprinkler special command")]
             public string SetSkinCommand = "setsprinklerspecial";
 
+            [JsonProperty(PropertyName = "Sprinkler control command")]
+            public string ControlCommand = "sprinklers";
+
             [JsonProperty(PropertyName = "Only turn on if there is no IO connected to sprinklers")]
             public bool CheckIoConnection = false;
+        }
+
+        private class StoredData
+        {
+            [JsonProperty(PropertyName = "Disabled tool cupboards")]
+            public HashSet<ulong> DisabledCupboards = new HashSet<ulong>();
         }
 
         protected override void LoadConfig()
@@ -94,14 +105,26 @@ namespace Oxide.Plugins
                 _config.SetSkinCommand = defaults.SetSkinCommand;
             }
 
+            if (string.IsNullOrWhiteSpace(_config.ControlCommand))
+            {
+                PrintWarning($"Invalid sprinkler control command; restored '{defaults.ControlCommand}'.");
+                _config.ControlCommand = defaults.ControlCommand;
+            }
+
             _config.PermissionUse = _config.PermissionUse.Trim();
             _config.PermissionAdmin = _config.PermissionAdmin.Trim();
             _config.SetSkinCommand = _config.SetSkinCommand.Trim();
+            _config.ControlCommand = _config.ControlCommand.Trim();
         }
 
         #endregion Configuration
 
         #region Lifecycle
+
+        private void Init()
+        {
+            LoadData();
+        }
 
         private void OnServerInitialized()
         {
@@ -115,18 +138,59 @@ namespace Oxide.Plugins
             permission.RegisterPermission(_config.PermissionUse, this);
             permission.RegisterPermission(_config.PermissionAdmin, this);
             AddCovalenceCommand(_config.SetSkinCommand, nameof(SprinklerSetSkin));
+            AddCovalenceCommand(_config.ControlCommand, nameof(SprinklerControl));
 
             timer.Once(1f, ReconcileAllSprinklers);
         }
 
         private void Unload()
         {
+            SaveData();
+
             foreach (var sprinkler in _modifiedSprinklers.ToArray())
             {
                 RestoreSprinkler(sprinkler);
             }
 
             _modifiedSprinklers.Clear();
+        }
+
+        private void OnServerSave()
+        {
+            SaveData();
+        }
+
+        private void OnNewSave(string filename)
+        {
+            _storedData = new StoredData();
+            SaveData();
+        }
+
+        private void LoadData()
+        {
+            try
+            {
+                _storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name) ?? new StoredData();
+            }
+            catch (Exception exception)
+            {
+                PrintError($"Data file error: {exception.Message}");
+                PrintWarning("Starting with every tool cupboard's waterless sprinklers enabled.");
+                _storedData = new StoredData();
+            }
+
+            if (_storedData.DisabledCupboards == null)
+            {
+                _storedData.DisabledCupboards = new HashSet<ulong>();
+            }
+        }
+
+        private void SaveData()
+        {
+            if (_storedData != null)
+            {
+                Interface.Oxide.DataFileSystem.WriteObject(Name, _storedData);
+            }
         }
 
         #endregion Lifecycle
@@ -141,6 +205,19 @@ namespace Oxide.Plugins
         private void OnEntityKill(Sprinkler sprinkler)
         {
             _modifiedSprinklers.Remove(sprinkler);
+        }
+
+        private void OnEntityKill(BuildingPrivlidge buildingPrivilege)
+        {
+            if (_storedData == null || buildingPrivilege == null || buildingPrivilege.net == null)
+            {
+                return;
+            }
+
+            if (_storedData.DisabledCupboards.Remove(buildingPrivilege.net.ID.Value))
+            {
+                SaveData();
+            }
         }
 
         private object OnWireConnect(BasePlayer player, IOEntity entity1, int inputs, IOEntity entity2, int outputs)
@@ -271,6 +348,76 @@ namespace Oxide.Plugins
             iplayer.Reply("Converted the sprinkler stack to special waterless sprinklers.");
         }
 
+        private void SprinklerControl(IPlayer iplayer, string command, string[] args)
+        {
+            var player = iplayer.Object as BasePlayer;
+            if (player == null)
+            {
+                iplayer.Reply("This command can only be used by an in-game player.");
+                return;
+            }
+
+            if (args.Length != 1)
+            {
+                iplayer.Reply($"Usage: /{_config.ControlCommand} <on|off|status>");
+                return;
+            }
+
+            var buildingPrivilege = player.GetBuildingPrivilege();
+            if (buildingPrivilege == null || buildingPrivilege.net == null)
+            {
+                iplayer.Reply("You must be inside a tool cupboard's building privilege area.");
+                return;
+            }
+
+            if (!buildingPrivilege.IsAuthed(player.userID))
+            {
+                iplayer.Reply("You must be authorized on this area's tool cupboard.");
+                return;
+            }
+
+            var sprinklers = FindSprinklers(buildingPrivilege);
+            var cupboardId = buildingPrivilege.net.ID.Value;
+            var isEnabled = !_storedData.DisabledCupboards.Contains(cupboardId);
+            var option = args[0].ToLowerInvariant();
+
+            if (option == "status")
+            {
+                iplayer.Reply($"Waterless sprinklers are {(isEnabled ? "ON" : "OFF")} for this TC area ({sprinklers.Count} sprinkler{(sprinklers.Count == 1 ? string.Empty : "s")}).");
+                return;
+            }
+
+            if (option != "on" && option != "off")
+            {
+                iplayer.Reply($"Usage: /{_config.ControlCommand} <on|off|status>");
+                return;
+            }
+
+            var enable = option == "on";
+            if (enable == isEnabled)
+            {
+                iplayer.Reply($"Waterless sprinklers are already {(enable ? "ON" : "OFF")} for this TC area ({sprinklers.Count} sprinkler{(sprinklers.Count == 1 ? string.Empty : "s")}).");
+                return;
+            }
+
+            if (enable)
+            {
+                _storedData.DisabledCupboards.Remove(cupboardId);
+            }
+            else
+            {
+                _storedData.DisabledCupboards.Add(cupboardId);
+            }
+
+            SaveData();
+            foreach (var sprinkler in sprinklers)
+            {
+                ReconcileSprinkler(sprinkler);
+            }
+
+            iplayer.Reply($"Turned waterless sprinklers {(enable ? "ON" : "OFF")} for this TC area ({sprinklers.Count} sprinkler{(sprinklers.Count == 1 ? string.Empty : "s")}).");
+        }
+
         #endregion Commands
 
         #region Sprinkler state
@@ -312,7 +459,9 @@ namespace Oxide.Plugins
             }
 
             var eligible = sprinkler.skinID == SprinklerSkinId || CanUse(sprinkler.OwnerID);
-            var shouldBeWaterless = eligible && (!_config.CheckIoConnection || !HasIoConnection(sprinkler));
+            var shouldBeWaterless = eligible
+                                    && IsEnabledForArea(sprinkler)
+                                    && (!_config.CheckIoConnection || !HasIoConnection(sprinkler));
 
             if (shouldBeWaterless)
             {
@@ -374,6 +523,24 @@ namespace Oxide.Plugins
             }
 
             return false;
+        }
+
+        private bool IsEnabledForArea(Sprinkler sprinkler)
+        {
+            var buildingPrivilege = sprinkler.GetBuildingPrivilege();
+            return buildingPrivilege == null
+                   || buildingPrivilege.net == null
+                   || !_storedData.DisabledCupboards.Contains(buildingPrivilege.net.ID.Value);
+        }
+
+        private static List<Sprinkler> FindSprinklers(BuildingPrivlidge buildingPrivilege)
+        {
+            return BaseNetworkable.serverEntities
+                .OfType<Sprinkler>()
+                .Where(sprinkler => sprinkler != null
+                                    && !sprinkler.IsDestroyed
+                                    && sprinkler.GetBuildingPrivilege() == buildingPrivilege)
+                .ToList();
         }
 
         private bool CanUse(ulong ownerId)

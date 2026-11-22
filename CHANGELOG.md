@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 - 2026-11-22
+
+- Added `/sprinklers on`, `/sprinklers off`, and `/sprinklers status`.
+- Restricted control to players authorized on the TC governing their current building privilege area.
+- Scoped changes to sprinklers governed by that exact TC so separate farms remain independent.
+- Persisted disabled TC areas across restarts and cleared them when the TC is destroyed or a new map begins.
+- Kept manual TC auth, TCAuth, and DynamicCupShare compatible without hard plugin dependencies.
+
 ## 1.1.0 - 2026-11-22
 
 - Fixed cleanup on plugin unload.
