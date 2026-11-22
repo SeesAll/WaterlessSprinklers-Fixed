@@ -8,6 +8,7 @@ Sprinklers can operate without a water connection. By default, the feature is av
 
 - Restores plugin-modified sprinklers when the plugin unloads.
 - Reconciles sprinkler state after wire connections and disconnections.
+- Reconciles existing sprinklers after relevant user or group permission changes.
 - Applies the IO setting consistently to newly placed and existing sprinklers.
 - Handles server-console command attempts without a null-reference exception.
 - Validates configuration strings and reports the underlying configuration error.

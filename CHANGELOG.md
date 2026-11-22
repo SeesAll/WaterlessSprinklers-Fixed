@@ -5,6 +5,7 @@
 - Fixed cleanup on plugin unload.
 - Fixed inconsistent IO-connection handling.
 - Added reconciliation for wire connect, wire clear, and cleared IO references.
+- Added event-driven reconciliation for relevant user and group permission changes.
 - Fixed server-console command null reference.
 - Added configuration validation and useful error reporting.
 - Added safe item-definition and IO-array checks.

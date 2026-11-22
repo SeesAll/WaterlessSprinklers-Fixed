@@ -173,6 +173,73 @@ namespace Oxide.Plugins
 
         #endregion Entity and IO hooks
 
+        #region Permission hooks
+
+        private void OnUserPermissionGranted(string userId, string permissionName)
+        {
+            QueuePermissionReconcile(userId, permissionName);
+        }
+
+        private void OnUserPermissionRevoked(string userId, string permissionName)
+        {
+            QueuePermissionReconcile(userId, permissionName);
+        }
+
+        private void OnUserGroupAdded(string userId, string groupName)
+        {
+            if (_config.UsePermission && permission.GroupHasPermission(groupName, _config.PermissionUse))
+            {
+                QueueOwnerReconcile(userId);
+            }
+        }
+
+        private void OnUserGroupRemoved(string userId, string groupName)
+        {
+            if (_config.UsePermission && permission.GroupHasPermission(groupName, _config.PermissionUse))
+            {
+                QueueOwnerReconcile(userId);
+            }
+        }
+
+        private void OnGroupPermissionGranted(string groupName, string permissionName)
+        {
+            QueueGroupPermissionReconcile(permissionName);
+        }
+
+        private void OnGroupPermissionRevoked(string groupName, string permissionName)
+        {
+            QueueGroupPermissionReconcile(permissionName);
+        }
+
+        private void QueuePermissionReconcile(string userId, string permissionName)
+        {
+            if (_config.UsePermission && permissionName == _config.PermissionUse)
+            {
+                QueueOwnerReconcile(userId);
+            }
+        }
+
+        private void QueueOwnerReconcile(string userId)
+        {
+            ulong ownerId;
+            if (!ulong.TryParse(userId, out ownerId))
+            {
+                return;
+            }
+
+            NextTick(() => ReconcileOwnerSprinklers(ownerId));
+        }
+
+        private void QueueGroupPermissionReconcile(string permissionName)
+        {
+            if (_config.UsePermission && permissionName == _config.PermissionUse)
+            {
+                NextTick(ReconcileAllSprinklers);
+            }
+        }
+
+        #endregion Permission hooks
+
         #region Commands
 
         private void SprinklerSetSkin(IPlayer iplayer, string command, string[] args)
@@ -218,6 +285,22 @@ namespace Oxide.Plugins
             foreach (var sprinkler in BaseNetworkable.serverEntities.OfType<Sprinkler>())
             {
                 ReconcileSprinkler(sprinkler);
+            }
+        }
+
+        private void ReconcileOwnerSprinklers(ulong ownerId)
+        {
+            if (_waterDefinition == null)
+            {
+                return;
+            }
+
+            foreach (var sprinkler in BaseNetworkable.serverEntities.OfType<Sprinkler>())
+            {
+                if (sprinkler.OwnerID == ownerId)
+                {
+                    ReconcileSprinkler(sprinkler);
+                }
             }
         }
 
