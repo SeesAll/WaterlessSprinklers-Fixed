@@ -37,6 +37,7 @@ The plugin creates `WaterlessSprinklers.json` in the framework's configuration d
   "PermissionAdmin": "waterlesssprinklers.admin",
   "Make sprinkler special command": "setsprinklerspecial",
   "Sprinkler control command": "sprinklers",
+  "Waterless sprinklers enabled by default": true,
   "Only turn on if there is no IO connected to sprinklers": false
 }
 ```
@@ -59,13 +60,13 @@ Players must be standing within a building privilege area and be authorized on t
 - `/sprinklers off` — disables waterless operation for sprinklers under the current TC. Sprinklers may still operate normally if supplied with vanilla water/IO.
 - `/sprinklers status` — reports the area's setting and sprinkler count.
 
-Each TC starts enabled. The choice persists across restarts and is reset on a new map save.
+The `Waterless sprinklers enabled by default` setting determines the initial state for each TC and for sprinklers outside TC coverage. Set it to `false` to require a TC-authorized player to opt in with `/sprinklers on`. Per-TC choices persist across restarts and reset on a new map save.
 
 ## Compatibility testing
 
 Always compile and smoke-test the plugin on a staging server after Rust, Oxide, or Carbon updates. This plugin calls Rust game methods directly, so a game update can require corresponding source changes.
 
-Version 1.2.0 was compiled, loaded, hot-reloaded, and console-command tested successfully on the Scavengers Haven TEST SERVER on 2026-11-22. Its generated configuration was verified to keep waterless mode available to every player by default, and its persistent TC-area state file was created successfully.
+Version 1.3.0 was compiled, loaded, and hot-reloaded successfully on the Scavengers Haven TEST SERVER on 2026-11-22. Its opt-in configuration was also validated with waterless operation disabled by default and IO-aware mode enabled.
 
 ## License
 

@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.2.0")]
+    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.3.0")]
     [Description("Allows sprinklers to operate without a water connection.")]
     class WaterlessSprinklers : CovalencePlugin
     {
@@ -40,6 +40,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Sprinkler control command")]
             public string ControlCommand = "sprinklers";
 
+            [JsonProperty(PropertyName = "Waterless sprinklers enabled by default")]
+            public bool WaterlessEnabledByDefault = true;
+
             [JsonProperty(PropertyName = "Only turn on if there is no IO connected to sprinklers")]
             public bool CheckIoConnection = false;
         }
@@ -48,6 +51,9 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Disabled tool cupboards")]
             public HashSet<ulong> DisabledCupboards = new HashSet<ulong>();
+
+            [JsonProperty(PropertyName = "Enabled tool cupboards")]
+            public HashSet<ulong> EnabledCupboards = new HashSet<ulong>();
         }
 
         protected override void LoadConfig()
@@ -183,6 +189,14 @@ namespace Oxide.Plugins
             {
                 _storedData.DisabledCupboards = new HashSet<ulong>();
             }
+
+            if (_storedData.EnabledCupboards == null)
+            {
+                _storedData.EnabledCupboards = new HashSet<ulong>();
+            }
+
+            // A disabled v1.2 entry wins if a manually edited data file contains both states.
+            _storedData.EnabledCupboards.ExceptWith(_storedData.DisabledCupboards);
         }
 
         private void SaveData()
@@ -214,7 +228,9 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (_storedData.DisabledCupboards.Remove(buildingPrivilege.net.ID.Value))
+            var cupboardId = buildingPrivilege.net.ID.Value;
+            if (_storedData.DisabledCupboards.Remove(cupboardId)
+                | _storedData.EnabledCupboards.Remove(cupboardId))
             {
                 SaveData();
             }
@@ -378,7 +394,7 @@ namespace Oxide.Plugins
 
             var sprinklers = FindSprinklers(buildingPrivilege);
             var cupboardId = buildingPrivilege.net.ID.Value;
-            var isEnabled = !_storedData.DisabledCupboards.Contains(cupboardId);
+            var isEnabled = IsEnabledForCupboard(cupboardId);
             var option = args[0].ToLowerInvariant();
 
             if (option == "status")
@@ -400,14 +416,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (enable)
-            {
-                _storedData.DisabledCupboards.Remove(cupboardId);
-            }
-            else
-            {
-                _storedData.DisabledCupboards.Add(cupboardId);
-            }
+            SetCupboardState(cupboardId, enable);
 
             SaveData();
             foreach (var sprinkler in sprinklers)
@@ -528,9 +537,44 @@ namespace Oxide.Plugins
         private bool IsEnabledForArea(Sprinkler sprinkler)
         {
             var buildingPrivilege = sprinkler.GetBuildingPrivilege();
-            return buildingPrivilege == null
-                   || buildingPrivilege.net == null
-                   || !_storedData.DisabledCupboards.Contains(buildingPrivilege.net.ID.Value);
+            return buildingPrivilege == null || buildingPrivilege.net == null
+                ? _config.WaterlessEnabledByDefault
+                : IsEnabledForCupboard(buildingPrivilege.net.ID.Value);
+        }
+
+        private bool IsEnabledForCupboard(ulong cupboardId)
+        {
+            if (_storedData.DisabledCupboards.Contains(cupboardId))
+            {
+                return false;
+            }
+
+            if (_storedData.EnabledCupboards.Contains(cupboardId))
+            {
+                return true;
+            }
+
+            return _config.WaterlessEnabledByDefault;
+        }
+
+        private void SetCupboardState(ulong cupboardId, bool enabled)
+        {
+            _storedData.DisabledCupboards.Remove(cupboardId);
+            _storedData.EnabledCupboards.Remove(cupboardId);
+
+            if (enabled == _config.WaterlessEnabledByDefault)
+            {
+                return;
+            }
+
+            if (enabled)
+            {
+                _storedData.EnabledCupboards.Add(cupboardId);
+            }
+            else
+            {
+                _storedData.DisabledCupboards.Add(cupboardId);
+            }
         }
 
         private static List<Sprinkler> FindSprinklers(BuildingPrivlidge buildingPrivilege)

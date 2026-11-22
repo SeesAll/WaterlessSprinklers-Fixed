@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 - 2026-11-22
+
+- Added `Waterless sprinklers enabled by default` so servers can make each TC opt-in or opt-out.
+- Preserved saved v1.2 disabled-TC choices during upgrade.
+- Added persistent enabled-TC overrides for servers whose default is off.
+- Applied the configured default to sprinklers outside TC coverage.
+
 ## 1.2.0 - 2026-11-22
 
 - Added `/sprinklers on`, `/sprinklers off`, and `/sprinklers status`.
