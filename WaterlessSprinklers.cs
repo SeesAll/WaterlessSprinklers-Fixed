@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.3.0")]
+    [Info("Waterless Sprinklers Fixed", "Lorenzo, maintained by SeesAll", "1.3.1")]
     [Description("Allows sprinklers to operate without a water connection.")]
     class WaterlessSprinklers : CovalencePlugin
     {
@@ -499,7 +499,10 @@ namespace Oxide.Plugins
             try
             {
                 sprinkler.SetFuelType(null, null);
-                sprinkler.RefreshSprinklerState(RefreshDelay);
+                sprinkler.UpdateFromInput(0, 0);
+                sprinkler.SetFlagLocal(BaseEntity.Flags.On, false);
+                sprinkler.RefreshSprinklerState();
+                sprinkler.SendChangedToRoot(true);
             }
             catch (Exception exception)
             {

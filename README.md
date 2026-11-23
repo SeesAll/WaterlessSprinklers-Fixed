@@ -66,7 +66,7 @@ The `Waterless sprinklers enabled by default` setting determines the initial sta
 
 Always compile and smoke-test the plugin on a staging server after Rust, Oxide, or Carbon updates. This plugin calls Rust game methods directly, so a game update can require corresponding source changes.
 
-Version 1.3.0 was compiled, loaded, and hot-reloaded successfully on the Scavengers Haven TEST SERVER on 2026-11-22. Its opt-in configuration was also validated with waterless operation disabled by default and IO-aware mode enabled.
+Version 1.3.1 was compiled, loaded, hot-reloaded, and tested successfully on the Scavengers Haven TEST SERVER on 2026-11-22. Testing confirmed that TC-authorized players can turn unconnected waterless sprinklers on and physically stop them again, with waterless operation disabled by default and IO-aware mode enabled.
 
 ## License
 

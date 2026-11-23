@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 - 2026-11-22
+
+- Fixed `/sprinklers off` leaving already-running waterless sprinklers active.
+- Clears cached artificial input and active state immediately when waterless operation is disabled.
+- Recalculates a real connected fluid circuit afterward so vanilla water connections can still operate.
+
 ## 1.3.0 - 2026-11-22
 
 - Added `Waterless sprinklers enabled by default` so servers can make each TC opt-in or opt-out.
